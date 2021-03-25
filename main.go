@@ -15,6 +15,10 @@ type UrlNotFound struct {
 	Star  string
 }
 
+type OlxAds struct {
+	Olxid string
+}
+
 func dbConn() (db *sql.DB) {
 	dbDriver := "mysql"
 	dbUser := "root"
@@ -41,7 +45,11 @@ func PingDB(db *sql.DB) {
 }
 
 func main() {
+	archiveAds()
+	deleteAds()
+}
 
+func archiveAds() {
 	db := dbConn()
 
 	olxDB, err := db.Query("select olxid, url from olx where created_at >= CURDATE() - INTERVAL 1 DAY and created_at < CURDATE() + INTERVAL 1 DAY  order by created_at desc")
@@ -90,5 +98,32 @@ func main() {
 			fmt.Println(urlnotfound)
 		}
 	}
+}
 
+func deleteAds() {
+	db := dbConn()
+
+	olxDB, err := db.Query("select olxid from olx where YEAR(created_at) = YEAR(CURRENT_DATE - INTERVAL 1 MONTH) and MONTH(created_at) = MONTH(CURRENT_DATE - INTERVAL 1 MONTH)")
+	if err != nil {
+		panic(err.Error())
+	}
+	olxads := OlxAds{}
+	olxadses := []OlxAds{}
+	for olxDB.Next() {
+		var olxid string
+
+		err = olxDB.Scan(&olxid)
+		if err != nil {
+			panic(err.Error())
+		}
+		olxads.Olxid = olxid
+		olxadses = append(olxadses, olxads)
+	}
+	defer db.Close()
+
+	for _, olxads := range olxadses {
+		fmt.Println(olxads.Olxid)
+		db.Exec("delete from olx where olxid = ?",
+			olxads.Olxid)
+	}
 }
