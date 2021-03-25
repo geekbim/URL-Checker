@@ -12,7 +12,7 @@ import (
 type UrlNotFound struct {
 	Olxid string
 	Url   string
-	Star  string `default: "false"`
+	Star  string
 }
 
 func dbConn() (db *sql.DB) {
@@ -59,6 +59,7 @@ func main() {
 		}
 		urlnotfound.Olxid = olxid
 		urlnotfound.Url = url
+		urlnotfound.Star = "false"
 		urlnotfounds = append(urlnotfounds, urlnotfound)
 	}
 	defer db.Close()
