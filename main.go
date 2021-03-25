@@ -9,8 +9,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-type Url struct {
-	Url string
+type UrlNotFound struct {
+	Olxid string
+	Url   string
+	Star  string `default: "false"`
 }
 
 func dbConn() (db *sql.DB) {
@@ -42,25 +44,27 @@ func main() {
 
 	db := dbConn()
 
-	olxDB, err := db.Query("select url from olx where created_at >= NOW() - INTERVAL 1 DAY order by created_at desc")
+	olxDB, err := db.Query("select olxid, url from olx where created_at >= CURDATE() - INTERVAL 1 DAY and created_at < CURDATE() + INTERVAL 1 DAY  order by created_at desc")
 	if err != nil {
 		panic(err.Error())
 	}
-	link := Url{}
-	links := []Url{}
+	urlnotfound := UrlNotFound{}
+	urlnotfounds := []UrlNotFound{}
 	for olxDB.Next() {
-		var url string
-		err = olxDB.Scan(&url)
+		var olxid, url string
+
+		err = olxDB.Scan(&olxid, &url)
 		if err != nil {
 			panic(err.Error())
 		}
-		link.Url = url
-		links = append(links, link)
+		urlnotfound.Olxid = olxid
+		urlnotfound.Url = url
+		urlnotfounds = append(urlnotfounds, urlnotfound)
 	}
 	defer db.Close()
 
-	for _, link := range links {
-		resp, err := http.Get(link.Url)
+	for _, urlnotfound := range urlnotfounds {
+		resp, err := http.Get(urlnotfound.Url)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -72,7 +76,17 @@ func main() {
 			fmt.Println("HTTP Status is in the 2xx range")
 		} else {
 			fmt.Println("Argh! Broken")
+			db.Exec("update olx set archived = 1 where olxid = ?",
+				urlnotfound.Olxid)
+			db.Exec("INSERT INTO olx_archive (deleted_at, created_at, olxid, star) "+
+				"VALUES( null, CURRENT_TIMESTAMP, ?, ? ) "+
+				"ON DUPLICATE KEY "+
+				"UPDATE deleted_at = null, updated_at = CURRENT_TIMESTAMP, star = ?",
+				urlnotfound.Olxid,
+				urlnotfound.Star,
+				urlnotfound.Star)
 
+			fmt.Println(urlnotfound)
 		}
 	}
 
