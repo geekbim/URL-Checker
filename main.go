@@ -125,5 +125,5 @@ func deleteAds() {
 		fmt.Println(olxads.Olxid)
 		db.Exec("delete from olx where olxid = ?",
 			olxads.Olxid)
-	}
+	
 }
