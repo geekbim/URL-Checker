@@ -10,19 +10,16 @@ import (
 )
 
 type UrlNotFound struct {
-	Olxid string
-	Url   string
-	Star  string
-}
-
-type OlxAds struct {
-	Olxid string
+	CreatedAt string
+	Olxid     string
+	Url       string
+	Star      string
 }
 
 func dbConn() (db *sql.DB) {
 	dbDriver := "mysql"
 	dbUser := "root"
-	dbPass := "hwhwhwlol"
+	dbPass := "8ismillah"
 	dbName := "odb"
 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
 
@@ -45,26 +42,23 @@ func PingDB(db *sql.DB) {
 }
 
 func main() {
-	archiveAds()
-	deleteAds()
-}
 
-func archiveAds() {
 	db := dbConn()
 
-	olxDB, err := db.Query("select olxid, url from olx where created_at >= CURDATE() - INTERVAL 1 DAY and created_at < CURDATE() + INTERVAL 1 DAY  order by created_at desc")
+	olxDB, err := db.Query("select created_at, olxid, url from olx where created_at >= CURDATE() - INTERVAL 30 DAY and created_at < CURDATE() + INTERVAL 1 DAY  order by created_at desc")
 	if err != nil {
 		panic(err.Error())
 	}
 	urlnotfound := UrlNotFound{}
 	urlnotfounds := []UrlNotFound{}
 	for olxDB.Next() {
-		var olxid, url string
+		var created_at, olxid, url string
 
-		err = olxDB.Scan(&olxid, &url)
+		err = olxDB.Scan(&created_at, &olxid, &url)
 		if err != nil {
 			panic(err.Error())
 		}
+		urlnotfound.CreatedAt = created_at
 		urlnotfound.Olxid = olxid
 		urlnotfound.Url = url
 		urlnotfound.Star = "false"
@@ -77,53 +71,32 @@ func archiveAds() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		// Resource leak if response body isn't closed
+		defer resp.Body.Close()
 
 		// Print the HTTP Status Code and Status Name
 		fmt.Println("HTTP Response Status:", resp.StatusCode, http.StatusText(resp.StatusCode))
+		fmt.Println("URL:", urlnotfound)
 
 		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 			fmt.Println("HTTP Status is in the 2xx range")
 		} else {
 			fmt.Println("Argh! Broken")
-			db.Exec("update olx set archived = 1 where olxid = ?",
+			// db.Exec("update olx set archived = 1 where olxid = ?",
+			// 	urlnotfound.Olxid)
+			// db.Exec("INSERT INTO olx_archive (deleted_at, created_at, olxid, star) "+
+			// 	"VALUES( null, CURRENT_TIMESTAMP, ?, ? ) "+
+			// 	"ON DUPLICATE KEY "+
+			// 	"UPDATE deleted_at = null, updated_at = CURRENT_TIMESTAMP, star = ?",
+			// 	urlnotfound.Olxid,
+			// 	urlnotfound.Star,
+			// 	urlnotfound.Star)
+
+			db.Exec("update olx set deleted_at = CURRENT_TIMESTAMP where olxid = ?",
 				urlnotfound.Olxid)
-			db.Exec("INSERT INTO olx_archive (deleted_at, created_at, olxid, star) "+
-				"VALUES( null, CURRENT_TIMESTAMP, ?, ? ) "+
-				"ON DUPLICATE KEY "+
-				"UPDATE deleted_at = null, updated_at = CURRENT_TIMESTAMP, star = ?",
-				urlnotfound.Olxid,
-				urlnotfound.Star,
-				urlnotfound.Star)
 
 			fmt.Println(urlnotfound)
 		}
 	}
-}
 
-func deleteAds() {
-	db := dbConn()
-
-	olxDB, err := db.Query("select olxid from olx where YEAR(created_at) = YEAR(CURRENT_DATE - INTERVAL 1 MONTH) and MONTH(created_at) = MONTH(CURRENT_DATE - INTERVAL 1 MONTH)")
-	if err != nil {
-		panic(err.Error())
-	}
-	olxads := OlxAds{}
-	olxadses := []OlxAds{}
-	for olxDB.Next() {
-		var olxid string
-
-		err = olxDB.Scan(&olxid)
-		if err != nil {
-			panic(err.Error())
-		}
-		olxads.Olxid = olxid
-		olxadses = append(olxadses, olxads)
-	}
-	defer db.Close()
-
-	for _, olxads := range olxadses {
-		fmt.Println(olxads.Olxid)
-		db.Exec("delete from olx where olxid = ?",
-			olxads.Olxid)
-	}
 }
