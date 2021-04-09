@@ -67,7 +67,7 @@ func main() {
 	defer db.Close()
 
 	for _, urlnotfound := range urlnotfounds {
-		resp, err := http.Get(urlnotfound.Url)
+		resp, err := http.Get("https://www.olx.co.id/item/" + urlnotfound.Olxid)
 		if err != nil {
 			log.Fatal(err)
 		}
